@@ -1,2 +1,3 @@
 # nuclei
-Track nuclei using a pytorch net
+Track nuclei using a pytorch net.
+
