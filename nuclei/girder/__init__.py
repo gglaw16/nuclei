@@ -86,9 +86,9 @@ class Annotation:
 # This is tricky. each image gets an annotation with all tracks upto that time.
 # there are too many tracks to make separate annotation for each.
 # Girder may allow adding annotation elements separately in the future.
-def upload_tracks(tracks, item_ids, gc=None):
+def upload_tracks(tracks, item_ids, name='tracks', gc=None):
     for item_time, item_id in enumerate(item_ids):
-        annotation = Annotation("tracks")
+        annotation = Annotation(name)
         for track in tracks:
             end_time = min(track.get_end_time(), item_time)
             points = []
@@ -131,6 +131,18 @@ def read_item_image(item_id, gc=None):
         return (image, item_obj)
     return (None, None)
 
+
+# downloads all the images in an item.  Returns a list of numpy images.
+def read_item_images(item_id, gc=None):
+    gc = get_gc(gc)
+    resp = gc.get('item/%s/files'%item_id)
+    images = []
+    for file_obj in resp:
+        im, item_obj = read_file_image(file_obj['_id'], gc)
+        if item_obj != None:
+            images.append(im)
+    return images
+    
 
 # downloads an image into a numpy array without going to disk.
 # Get an image from a girder file id
@@ -188,9 +200,7 @@ def upload_image(image, item_name, destination_folder_id,
     gc.uploadFileToItem(girder_item['_id'], tmp_file_name)
 
 
-# Batch is numpy (batch, comps, dimy, dimx)
-# Upload the images to girder (for debugging)
-# Crude, but at least the chips do not change when the annotation changes.
+# Upload an array of images to girder light box.
 def upload_images(images, item_name, destination_folder_id,
                   num=None, gc=None, stomp=True, filenames=None):
     gc = get_gc(gc)

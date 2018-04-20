@@ -64,7 +64,7 @@ def mask_on_image(mask, img):
     return out
 
 def find_cell_ellipses(img):    
-    threshold = 40
+    threshold = 20
     ret,mask = cv2.threshold(img,threshold,255,cv2.THRESH_BINARY)
 
     # it is hard to see what the media does because the noise has such low amplitude.
@@ -73,11 +73,12 @@ def find_cell_ellipses(img):
 
     # Lets try to get rid of dark spots in nuclei with a closing filter.
     kernel = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (11,11)).astype(np.uint8)
-    closing = cv2.morphologyEx(median, cv2.MORPH_CLOSE, kernel, iterations=1)
+    closing = cv2.morphologyEx(median, cv2.MORPH_CLOSE, kernel, iterations=2)
+    opening = cv2.morphologyEx(closing, cv2.MORPH_OPEN, kernel, iterations=2)
 
     # Dilate to get background 
     kernel = np.ones((3,3))
-    sure_background = cv2.morphologyEx(closing, cv2.MORPH_DILATE, kernel, iterations = 20)
+    sure_background = cv2.morphologyEx(opening, cv2.MORPH_DILATE, kernel, iterations = 20)
 
     tmp = mask_on_image(closing, sure_background)
 
@@ -154,8 +155,8 @@ def is_above_line(a,b,x,y):
     return(False)
 
 #makes a b/w mask of a solid ellipse
-def make_ellipse_mask(ellipse,time, data_dir):
-    img = cv2.imread(data_dir + "channel1time%d.png"%time)
+def make_ellipse_mask(ellipse,time, gc, folder_id):
+    img = load_time_image(gc, folder_id, time)
     black_img = np.zeros(img.shape, dtype=np.uint8)
     cv2.ellipse(black_img, ellipse, (1,1,1), -1)
     return(black_img)
@@ -286,28 +287,39 @@ def find_track_that_ends_with_ellipse(tracks, e):
     return None
 
 
-def rank_merge_tracks(track1, track2):
+def rank_merge_tracks(track1, track2, rows=[]):
     #this returns the max dist between tracks
     prevdist = -1
     for time in range(track1.get_start_time(),track1.get_end_time() + 1):
         ell1 = track1.get_ellipse_from_time(time)
         for i in range(-5,5):
             ell2 = track2.get_ellipse_from_time(time+i)
-            if ell1 != None and ell2 != None:
-                dist = ((ell2[0][0]-ell1[0][0])**2+(ell2[0][1]-ell1[0][1])**2)**.5
-                if dist > prevdist:
+            dist = getDistBtwEll(ell1,ell2, rows)
+            if dist > prevdist:
                     prevdist = dist
     #in case its always None
     if prevdist == -1:
         return 50000
     return prevdist
 
-def find_best_track_to_merge(track1, tracks):
+def getDistBtwEll(ell1, ell2, rows):
+    if ell1 != None and ell2 != None:
+        dist = ((ell2[0][0]-ell1[0][0])**2+(ell2[0][1]-ell1[0][1])**2)**.5
+        for row in rows:
+            if (ell1[0][1] < row[0]*ell1[0][0]+row[1] and ell2[0][1] > row[0]*ell2[0][0]+row[1]) or \
+               (ell2[0][1] < row[0]*ell2[0][0]+row[1] and ell1[0][1] > row[0]*ell1[0][0]+row[1]):
+                dist = dist-50
+        if (dist < 0):
+            dist = 0.0
+        return dist
+    return 10000000
+    
+def find_best_track_to_merge(track1, tracks, rows=[]):
     # Todo: if neither end is in the spatial temporal center, return None.    
     best_track = None
     for track2 in tracks:
         if track2 != track1:
-            score = rank_merge_tracks(track1, track2)
+            score = rank_merge_tracks(track1, track2, rows)
             if best_track == None or best_score > score:
                 best_score = score
                 best_track = track2       

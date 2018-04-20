@@ -6,6 +6,7 @@ import pdb
 class time_lapse_data():
 
     def __init__(self):
+        self.series_folders = []
         self.series = []
         
     def load(self, girder_folder_id, gc=None):
@@ -13,6 +14,7 @@ class time_lapse_data():
         resp = gc.get('folder?parentType=folder&parentId=%s&limit=100&sort=lowerName&sortdir=1'%girder_folder_id)
         for folder in resp:
             if 'series' in folder['name']:
+                self.series_folders.append(folder)
                 self.load_series(folder['_id'], gc)
 
     def load_series(self, girder_folder_id, gc=None):
@@ -31,7 +33,12 @@ class time_lapse_data():
         if series_idx < 0 or series_idx >= len(self.series):
             return 0
         return len(self.series[series_idx])
-        
+
+    def get_series_folder(self, series_idx):
+        if series_idx < 0 or series_idx >= len(self.series_folders):
+            return None
+        return self.series_folders[series_idx]
+    
     def get_image(self, series_idx, time_idx, gc=None):
         gc = g.get_gc(gc)
         if series_idx < 0 or series_idx >= len(self.series):

@@ -18,13 +18,13 @@ source = reader.time_lapse_data()
 source.load('5aaf02831fbb9006233ae6a2')
 series_idx = 0
 num_time_steps = source.get_series_length(series_idx)
-img1, item_obj = source.get_image(series_idx,0)
+img1, item_obj = source.get_image(series_idx,10)
 
 annotation = g.Annotation("tracks")
-pdb.set_trace()
 annotation.LoadFromItem(item_obj['_id'])
 
 tracks = annotation.annot_obj
+pdb.set_trace()
 
 
 print(len(tracks))
