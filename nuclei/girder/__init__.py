@@ -98,10 +98,34 @@ def upload_tracks(tracks, item_ids, name='tracks', gc=None):
                     # I do not think the ellispe willever be none, but ... this cannot hurt
                     x = int(ellipse[0][0])
                     y = int(ellipse[0][1])
-                    points.append((x,y,0))
+                    points.append((x,y,t))
             annotation.AddPolyline(points, track.get_hex_color())
         annotation.SaveToItem(item_id, overwrite=True, gc=gc)
 
+        
+# upload tacks to annotation of the stack item.
+def upload_tracks_to_stack(tracks, folder_id, gc=None):
+    gc = get_gc(gc)
+    # find the stack in the folder (by name)
+    resp = gc.get('item?folderId=%s&name=%s'%(folder_id, 'stack'))
+    if len(resp) != 1:
+        print("Could not find stack.")
+        return
+    item_id = resp[0]['_id']
+
+    # make the annotation
+    annotation = Annotation('tracks')
+    for track in tracks:
+        points = []
+        for i in range(track.get_length()):
+            ellipse, t = track.get_ellipse(i)
+            x = int(ellipse[0][0])
+            y = int(ellipse[0][1])
+            points.append((x,y,t))
+        annotation.AddPolyline(points, track.get_hex_color())
+
+    # save the annotation
+    annotation.SaveToItem(item_id, overwrite=True, gc=gc)
 
     
 # Find circles in an image and upload to girder (as anntoations).

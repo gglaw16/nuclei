@@ -10,18 +10,15 @@ import random
 
 
 def match_ellipses(ellipses1, ellipses2):
-
     dict_e2_e1 = {}
     for e2 in ellipses2:
         prevdist = 300000
         pt2 = e2[0]
         for e1 in ellipses1:
-
             dist = ((e2[0][0]-e1[0][0])**2+(e2[0][1]-e1[0][1])**2)**.5
             if dist < prevdist:
                 prevdist = dist
                 closest = e1
-
         dict_e2_e1[e2] = closest
 
     dict_e1_e2 = {}
@@ -153,13 +150,6 @@ def is_above_line(a,b,x,y):
     if(yforxinline > y):
         return(True)
     return(False)
-
-#makes a b/w mask of a solid ellipse
-def make_ellipse_mask(ellipse,time, gc, folder_id):
-    img = load_time_image(gc, folder_id, time)
-    black_img = np.zeros(img.shape, dtype=np.uint8)
-    cv2.ellipse(black_img, ellipse, (1,1,1), -1)
-    return(black_img)
 
 class Track:
     def __init__(self):
@@ -302,15 +292,19 @@ def rank_merge_tracks(track1, track2, rows=[]):
         return 50000
     return prevdist
 
+# This modifies Euclidean distance by ignoring a rectangle of space around rows.
+# coded for horizontal rows (It just shrinks the y dimension)
 def getDistBtwEll(ell1, ell2, rows):
     if ell1 != None and ell2 != None:
-        dist = ((ell2[0][0]-ell1[0][0])**2+(ell2[0][1]-ell1[0][1])**2)**.5
+        dx = ell2[0][0] - ell1[0][0]
+        dy = ell2[0][1] - ell1[0][1]
         for row in rows:
             if (ell1[0][1] < row[0]*ell1[0][0]+row[1] and ell2[0][1] > row[0]*ell2[0][0]+row[1]) or \
                (ell2[0][1] < row[0]*ell2[0][0]+row[1] and ell1[0][1] > row[0]*ell1[0][0]+row[1]):
-                dist = dist-50
-        if (dist < 0):
-            dist = 0.0
+                dy = dy-100
+        if (dy < 0):
+            dy = 0.0
+        dist = (dx**2 + dy**2)**.5
         return dist
     return 10000000
     
@@ -337,58 +331,68 @@ def save_frame(tm, data_dir, combined_tracks):
     for track in combined_tracks:
         track.draw_in_frame(im, tm)
     cv2.imwrite("test%02d.png"%tm, im)
-    
-#=========================================================================
-# Girder stuff.
 
-# Get a time sample image from girder.
-# gc: girder_client authenticated to read the folder of interest.
-# folder_id:  id of the series folder containing a lsit of images.
-# time_idx: Integer index of the time sample requested.  Folder items names
-#   must be formated "time04d%"%time_idx (for now).
-# numpy array is returned.  Images now are stored as 3 cahnnel RGB.
-def load_time_image(gc, folder_id, time_idx):
-    time_step_name = "time%04d"%time_idx
-    resp = gc.get("item?folderId=%s&name=%s"%(folder_id, time_step_name))
-    if len(resp) == 0:
-        return None
-    item_id = resp[0]['_id']
-    
-    item_obj = gc.get("item/%s"%item_id)
-    image_name = item_obj['name']
-    resp = gc.get("item/%s/files"%item_id)
-    png_id = None
-    for file_info in resp:
-        if os.path.splitext(file_info['name'])[1] == '.png':
-            png_id = file_info['_id']
-    if png_id:
-        url = gc.urlBase + "file/" + png_id + "/download"
-        #req = urllib.request.urlopen(url)
-        headers = {'Girder-Token': gc.token}
-        try:
-            req = urllib.request.Request(url, None, headers)
-            response = urllib.request.urlopen(req)
-            #image = response.read()
-            image = np.asarray(bytearray(response.read()), dtype="uint8")
-            image = cv2.imdecode(image, cv2.IMREAD_COLOR)
-            print('image loaded %s'%png_id)
-            return (image, item_obj)
-        except urllib.HTTPError:
-            if err.code == 400:
-                print("Bad request!")
-            elif err.code == 404:
-                print("Page not found!")
-            elif err.code == 403:
-                print("Access denied!")
-            else:
-                print("Something happened! Error code %d" % err.code)
+# detect cirlces in the first channel of an image and fit 3 horizontal rows to the circle centers.
+# returns [ [slope,y], [slope,y], [slope, y] ]
+# todo make this more general (number of rows..
+def compute_rows(img):
+    gray_image = img[:,:,0]
+    circles = cv2.HoughCircles(gray_image,cv2.HOUGH_GRADIENT,1,50, \
+                               param1=50,param2=30,minRadius=50,maxRadius=100)
+    row1x = []
+    row2x = []
+    row3x = []
+    row1y = []
+    row2y = []
+    row3y = []
+    row1r = []
+    row2r = []
+    row3r = []
 
-    # get the image through the tile API
-    #image = get_girder_large_cutout(gc, item_id, 1)
-    return (None, None)
+    row1x.append(circles[0][0][0])
+    row1y.append(circles[0][0][1])
+    row1r.append(circles[0][0][2])
 
+    for circle in circles[0]:
+        if circle[1] < row1y[0]+row1r[0]+30 and circle[1] > row1y[0]-row1r[0]-30:
+            row1x.append(circle[0])
+            row1y.append(circle[1])
+            row1r.append(circle[2])
+        elif (row2x != [] and circle[1] < row2y[0]+row2r[0]+30 and circle[1] > row2y[0]-row2r[0]-30) or row2x == []:
+            row2x.append(circle[0])
+            row2y.append(circle[1])
+            row2r.append(circle[2])
+        else:
+            row3x.append(circle[0])
+            row3y.append(circle[1])
+            row3r.append(circle[2])
+            
+    if row1y[1] < row2y[1] and row1y[1] < row3y[1]:
+        row1 = np.polyfit(row1x, row1y,1)
+        if row2y[1] < row3y[1]:
+            row2 = np.polyfit(row2x, row2y,1)
+            row3 = np.polyfit(row3x, row3y,1)
+        else :
+            row3 = np.polyfit(row2x, row2y,1)
+            row2 = np.polyfit(row3x, row3y,1)
+    elif row2y[1] < row3y[1] and row2y[1] < row1y[1]:
+        row1 = np.polyfit(row2x, row2y,1)
+        if row1y[1] < row3y[1]:
+            row2 = np.polyfit(row1x, row1y,1)
+            row3 = np.polyfit(row3x, row3y,1)
+        else :
+            row3 = np.polyfit(row1x, row1y,1)
+            row2 = np.polyfit(row3x, row3y,1)
+    else :
+        row1 = np.polyfit(row3x, row3y,1)
+        if row1y[1] < row2y[1]:
+            row2 = np.polyfit(row1x, row1y,1)
+            row3 = np.polyfit(row2x, row2y,1)
+        else :
+            row3 = np.polyfit(row1x, row1y,1)
+            row2 = np.polyfit(row2x, row2y,1)
 
-
+    return [row1, row2, row3]
 
 
 
