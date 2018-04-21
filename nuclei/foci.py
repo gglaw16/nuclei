@@ -13,7 +13,7 @@ def match_ellipses(ellipses1, ellipses2):
 
     dict_e2_e1 = {}
     for e2 in ellipses2:
-        prevdist = 3000
+        prevdist = 300000
         pt2 = e2[0]
         for e1 in ellipses1:
 
@@ -26,7 +26,7 @@ def match_ellipses(ellipses1, ellipses2):
 
     dict_e1_e2 = {}
     for e1 in ellipses1:
-        prevdist = 3000
+        prevdist = 300000
         pt1 = e1[0]
         for e2 in ellipses2:
             dist = ((e1[0][0]-e2[0][0])**2+(e1[0][1]-e2[0][1])**2)**.5
