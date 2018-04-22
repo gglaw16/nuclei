@@ -30,6 +30,13 @@ class Annotation:
     def __init__(self, name):
         self.annot_obj = {"elements":[],"name":name}
 
+    def get_number_of_elements(self):
+        return len(self.annot_obj['elements'])
+
+    def get_element(self, idx):
+        if idx < 0 or idx >= len(self.annot_obj['elements']):
+            return None
+        return self.annot_obj['elements'][idx]
         
     def SetName(self, new_name):
         self.annot_obj['name'] = new_name
@@ -76,7 +83,8 @@ class Annotation:
         if len(resp) == 0:
             return False
         annotation_id = resp[0]["_id"]
-
+        print("annotation_id = %s"%annotation_id)
+        
         # now load the annotation
         resp = gc.get("annotation/%s"%annotation_id)
         self.annot_obj = resp['annotation']

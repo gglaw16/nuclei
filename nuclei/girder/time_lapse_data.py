@@ -50,7 +50,7 @@ class time_lapse_data():
         return image, img_obj
 
     def get_series_stack(self, series_idx, gc=None):
-        gc = get_gc(gc);
+        gc = g.get_gc(gc);
         folder = self.get_series_folder(series_idx)
         resp = gc.get('item?folderId=%s&name=stack'%folder['_id'])
         if len(resp) == 0:

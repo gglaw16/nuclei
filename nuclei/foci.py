@@ -9,13 +9,199 @@ import pdb
 import random
 
 
-def match_ellipses(ellipses1, ellipses2):
+# =====================================================================================
+class Track:
+    def __init__(self):
+        self.ellipses = []
+        self.times = []
+        # color to draw the track
+        # todo: randomize colors
+        # not sure about this format
+        self.color = (random.randint(0,255),random.randint(0,255),random.randint(0,255))
+
+    def p(self):
+        length = len(self.ellipses)       
+        print("Track (length = %d, color = %s):"%(length, str(self.get_hex_color())))
+        for i in range(length):
+              pt = self.ellipses[i][0]
+              print("  %d: (%f, %f)"%(self.times[i],pt[0],pt[1]))
+
+    #def get_ellipses(self):
+    #    return self.ellipses
+        
+    #def get_times(self):
+    #    return self.times
+    
+    def add_ellipse(self, ellipse, time):
+        self.ellipses.append(ellipse)
+        self.times.append(time)
+
+    def add_point(self, pt, time):
+        # I am not sure of the format of opencv ellipses.
+        self.add_ellipse([pt], time)
+
+    def get_ellipse(self, idx):
+        return (self.ellipses[idx], self.times[idx])
+
+    def get_length(self):
+        return len(self.ellipses)
+    
+    def get_ellipse_from_time(self,time):
+        for i in range(0,len(self.ellipses)):
+            if(self.times[i] == time):
+                return self.ellipses[i]
+        return None
+    
+    def get_time_from_ellipse(self,ellipse):
+        for i in range(0,len(self.times)):
+            if(self.ellipses[i] == ellipse):
+                return self.times[i]
+        return None
+
+    # right now this depends that the ellipses are added sorted in time.
+    def get_start_time(self):
+        if len(self.times) == 0:
+            return None
+        return self.times[0]
+
+    # right now this depends that the ellipses are added sorted in time.
+    def get_end_time(self):
+        if len(self.times) == 0:
+            return None
+        return self.times[-1]
+
+    # draw all the segments up to "time".  Draw the ellipse at time "time"
+    def draw_in_frame(self, img, time):
+        pt1 = self.ellipses[0][0]
+        for i in range(1,len(self.ellipses)): 
+            pt2 = self.ellipses[i][0]
+            if(self.times[i] <= time):
+                cv2.line(img,(int(pt1[0]),int(pt1[1])),(int(pt2[0]),int(pt2[1])),self.color,5)
+            pt1 = pt2
+        return img
+    
+    #merge another track to the beginning of this track
+    def merge_track(self, track):
+        start = min(self.get_start_time(), track.get_start_time())
+        end = max(self.get_end_time(), track.get_end_time())
+        new_ellipses = []
+        new_times = []
+        for t in range(start, end+1):
+            e1 = self.get_ellipse_from_time(t)
+            e2 = track.get_ellipse_from_time(t)
+            if e1 != None:
+                # TODO: merge ellipses if we have two
+                new_ellipses.append(e1)
+                new_times.append(t)
+            elif e2 != None:
+                new_ellipses.append(e2)
+                new_times.append(t)
+        self.ellipses = new_ellipses
+        self.times = new_times
+    
+    #returns the time of the first ellipse higher than a line
+    def cross_line(self, a, b):
+        for ellipse in self.ellipses:
+            if is_above_line(a,b,ellipse[0][0],ellipse[0][1]):
+                return self.get_time_from_ellipse(ellipse)
+        return -1
+
+    def get_hex_color(self):
+        hex_digits = '0123456789abcdef'
+        hex_color = '#'
+        for i in range(3):
+            tmp = self.color[i]
+            digit1 = int(math.floor(tmp/16))
+            hex_color += hex_digits[digit1]
+            digit2 = tmp%16
+            hex_color += hex_digits[digit2]
+        return hex_color
+
+    def set_color(self, color):
+        if isinstance(color, str):
+            hex_digits = "0123456789abcdef"
+            r = hex_digits.index(color[1])*16 + hex_digits.index(color[2])
+            g = hex_digits.index(color[3])*16 + hex_digits.index(color[4])
+            b = hex_digits.index(color[5])*16 + hex_digits.index(color[6])
+            self.color = (r,g,b)
+        else:
+            self.color = color
+    
+# =====================================================================================
+
+    
+# Import a girder annotation into this track.  It will not have ellipses, only centers.
+# returns a list of tracks.
+def convert_annotation_to_tracks(annot):
+    tracks = []
+    for i in range(annot.get_number_of_elements()):
+        e = annot.get_element(i)
+        if e['type'] == 'polyline':
+            track = Track()
+            track.set_color(e['lineColor'])
+            points = e['points']
+            for pt in points:
+                track.add_point(pt, pt[2])
+            tracks.append(track)
+    return tracks
+
+def color_to_hex(color):
+    if isinstance(color, str):
+        return color
+
+    # case floats: is white (1.0, 1.0, 1.0) or (255.0, 255.0, 255.0)?
+    max = 0
+    for c in color:
+        if c > max:
+            max = c
+
+    # convert the color to hex format.
+    hex_digits = "0123456789abcdef"
+    hex_color = '#'
+    for c in color:
+        if isinstance(c, float):
+            if max <= 1.0:
+                c = c * 255.0
+            c = int(c)
+        if c < 0:
+            c = 0
+        if c > 255:
+            c = 255
+        hex_color = hex_color + hex_digits[int(c/16)]
+        hex_color = hex_color + hex_digits[c%16]
+
+    return hex_color
+
+
+def find_track_by_color(tracks, color):
+    hex_color = color_to_hex(color)
+    # shortest that matches the color
+    best_track = None
+    for t in tracks:
+        if t.get_hex_color() == hex_color:
+            if not best_track or best_track.get_length() < t.get_length():
+                best_track = t
+    return best_track
+                                                            
+    
+def find_annotation_element_by_color(annot, color):
+    hex_color = color_to_hex(color)
+    # shortest because mismerged tracks in after will be long
+    best_track = None
+    for e in annot['elements']:
+        if e['type'] == 'polyline' and e['lineColor'] == hex_color:
+            if not best_track or len(best_track) < len(e['points']):
+                best_track = e['points']
+    return best_track
+
+
+def match_ellipses(ellipses1, ellipses2, rows=[]):
     dict_e2_e1 = {}
     for e2 in ellipses2:
         prevdist = 300000
         pt2 = e2[0]
         for e1 in ellipses1:
-            dist = ((e2[0][0]-e1[0][0])**2+(e2[0][1]-e1[0][1])**2)**.5
+            dist = getDistBtwEll(e1,e2, rows)
             if dist < prevdist:
                 prevdist = dist
                 closest = e1
@@ -26,7 +212,7 @@ def match_ellipses(ellipses1, ellipses2):
         prevdist = 300000
         pt1 = e1[0]
         for e2 in ellipses2:
-            dist = ((e1[0][0]-e2[0][0])**2+(e1[0][1]-e2[0][1])**2)**.5
+            dist = getDistBtwEll(e1,e2, rows)
             if dist < prevdist:
                 prevdist = dist
                 closest = e2
@@ -151,110 +337,6 @@ def is_above_line(a,b,x,y):
         return(True)
     return(False)
 
-class Track:
-    def __init__(self):
-        self.ellipses = []
-        self.times = []
-        # color to draw the track
-        # todo: randomize colors
-        # not sure about this format
-        self.color = (random.randint(0,255),random.randint(0,255),random.randint(0,255))
-
-    def p(self):
-        length = len(self.ellipses)       
-        print("Track (length = %d):"%length)
-        for i in range(length):
-              pt = self.ellipses[i][0]
-              print("  %d: (%f, %f)"%(self.times[i],pt[0],pt[1]))
-        
-    #def get_ellipses(self):
-    #    return self.ellipses
-        
-    #def get_times(self):
-    #    return self.times
-    
-    def add_ellipse(self, ellipse, time):
-        self.ellipses.append(ellipse)
-        self.times.append(time)
-
-    def get_ellipse(self, idx):
-        return (self.ellipses[idx], self.times[idx])
-
-    def get_length(self):
-        return len(self.ellipses)
-    
-    def get_ellipse_from_time(self,time):
-        for i in range(0,len(self.ellipses)):
-            if(self.times[i] == time):
-                return self.ellipses[i]
-        return None
-    
-    def get_time_from_ellipse(self,ellipse):
-        for i in range(0,len(self.times)):
-            if(self.ellipses[i] == ellipse):
-                return self.times[i]
-        return None
-
-    # right now this depends that the ellipses are added sorted in time.
-    def get_start_time(self):
-        if len(self.times) == 0:
-            return None
-        return self.times[0]
-
-    # right now this depends that the ellipses are added sorted in time.
-    def get_end_time(self):
-        if len(self.times) == 0:
-            return None
-        return self.times[-1]
-
-    # draw all the segments up to "time".  Draw the ellipse at time "time"
-    def draw_in_frame(self, img, time):
-        pt1 = self.ellipses[0][0]
-        for i in range(1,len(self.ellipses)): 
-            pt2 = self.ellipses[i][0]
-            if(self.times[i] <= time):
-                cv2.line(img,(int(pt1[0]),int(pt1[1])),(int(pt2[0]),int(pt2[1])),self.color,5)
-            pt1 = pt2
-        return img
-    
-    #merge another track to the beginning of this track
-    def merge_track(self, track):
-        start = min(self.get_start_time(), track.get_start_time())
-        end = max(self.get_end_time(), track.get_end_time())
-        new_ellipses = []
-        new_times = []
-        for t in range(start, end+1):
-            e1 = self.get_ellipse_from_time(t)
-            e2 = track.get_ellipse_from_time(t)
-            if e1 != None:
-                # TODO: merge ellipses if we have two
-                new_ellipses.append(e1)
-                new_times.append(t)
-            elif e2 != None:
-                new_ellipses.append(e2)
-                new_times.append(t)
-        self.ellipses = new_ellipses
-        self.times = new_times
-    
-    #returns the time of the first ellipse higher than a line
-    def cross_line(self, a, b):
-        for ellipse in self.ellipses:
-            if is_above_line(a,b,ellipse[0][0],ellipse[0][1]):
-                return self.get_time_from_ellipse(ellipse)
-        return -1
-
-    def get_hex_color(self):
-        hex_digits = '0123456789abcdef'
-        hex_color = '#'
-        for i in range(3):
-            tmp = self.color[i]
-            digit1 = int(math.floor(tmp/16))
-            hex_color += hex_digits[digit1]
-            digit2 = tmp%16
-            hex_color += hex_digits[digit2]
-        return hex_color
-    
-    
 def get_frame(idx, data_dir):
     img1 = cv2.imread(data_dir + "channel1time%d.png"%idx)
     img2 = cv2.imread(data_dir + "channel2time%d.png"%idx)
@@ -279,29 +361,47 @@ def find_track_that_ends_with_ellipse(tracks, e):
 
 def rank_merge_tracks(track1, track2, rows=[]):
     #this returns the max dist between tracks
-    prevdist = -1
-    for time in range(track1.get_start_time(),track1.get_end_time() + 1):
+    # case 1: overlap
+    maxdist = -1
+    start1 = track1.get_start_time()
+    end1 = track1.get_end_time()
+    for time in range(start1, end1 + 1):
         ell1 = track1.get_ellipse_from_time(time)
-        for i in range(-5,5):
-            ell2 = track2.get_ellipse_from_time(time+i)
+        ell2 = track2.get_ellipse_from_time(time)
+        if ell2 != None:
             dist = getDistBtwEll(ell1,ell2, rows)
-            if dist > prevdist:
-                    prevdist = dist
-    #in case its always None
-    if prevdist == -1:
-        return 50000
-    return prevdist
+            if dist > maxdist:
+                maxdist = dist
+    if maxdist != -1:
+        return maxdist
+
+    # handle a gap.  Find the two closest points in time
+    start2 = track2.get_start_time()
+    end2 = track2.get_end_time()
+    if abs(start2 - end1) < abs(start1 - end2):
+        t1 = end1
+        t2 = start2
+    else:
+        t2 = end2
+        t1 = start1
+    if abs(t2-t1) > 2:
+        return 99999999
+    ell1 = track1.get_ellipse_from_time(t1)
+    ell2 = track2.get_ellipse_from_time(t2)
+
+    return getDistBtwEll(ell1,ell2, rows) * abs(t2-t1)*25
+
 
 # This modifies Euclidean distance by ignoring a rectangle of space around rows.
 # coded for horizontal rows (It just shrinks the y dimension)
 def getDistBtwEll(ell1, ell2, rows):
     if ell1 != None and ell2 != None:
-        dx = ell2[0][0] - ell1[0][0]
-        dy = ell2[0][1] - ell1[0][1]
+        dx = abs(ell2[0][0] - ell1[0][0])
+        dy = abs(ell2[0][1] - ell1[0][1])
         for row in rows:
             if (ell1[0][1] < row[0]*ell1[0][0]+row[1] and ell2[0][1] > row[0]*ell2[0][0]+row[1]) or \
                (ell2[0][1] < row[0]*ell2[0][0]+row[1] and ell1[0][1] > row[0]*ell1[0][0]+row[1]):
-                dy = dy-100
+                dy = dy-60
         if (dy < 0):
             dy = 0.0
         dist = (dx**2 + dy**2)**.5
