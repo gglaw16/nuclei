@@ -49,6 +49,14 @@ class time_lapse_data():
         image, img_obj = g.read_item_image(series[time_idx]['_id'], gc)
         return image, img_obj
 
+    def get_series_stack(self, series_idx, gc=None):
+        gc = get_gc(gc);
+        folder = self.get_series_folder(series_idx)
+        resp = gc.get('item?folderId=%s&name=stack'%folder['_id'])
+        if len(resp) == 0:
+            return None
+        return resp[0]
+    
 if __name__ == "__main__":
     # test the class.
     source = time_lapse_data()
