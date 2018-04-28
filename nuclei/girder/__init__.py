@@ -230,7 +230,9 @@ def upload_image(image, item_name, destination_folder_id,
     scipy.misc.imsave(tmp_file_name, image)
     # upload the file into the girder item
     gc.uploadFileToItem(girder_item['_id'], tmp_file_name)
-
+    print(girder_item['_id'])
+    return girder_item
+    
 
 # Upload an array of images to girder light box.
 def upload_images(images, item_name, destination_folder_id,
@@ -369,6 +371,11 @@ def get_decendant_folder_id(ancestor_id, ancestor_type, folder_name, gc=None):
             if folder_id:
                 return folder_id
     return None
+
+def set_item_description(item_id, description, gc=None):
+    gc = get_gc(gc)
+    resp = gc.put('item/%s?description=%s'%encodeURI(desription))
+
 
 """
 def get_girder_cutout(gc, image_id, left, top, width, height, scale = 1):
