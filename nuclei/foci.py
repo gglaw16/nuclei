@@ -334,7 +334,7 @@ def find_cell_ellipses(img):
 #tells you whether a given point is above a given line
 def is_above_line(a,b,x,y):
     yforxinline = a*x + b
-    if(yforxinline > y):
+    if(y < yforxinline):
         return(True)
     return(False)
 
