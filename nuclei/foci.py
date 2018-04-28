@@ -7,6 +7,7 @@ import math
 import os
 import pdb
 import random
+from pprint import pprint
 
 
 # =====================================================================================
@@ -439,6 +440,13 @@ def compute_rows(img):
     gray_image = img[:,:,0]
     circles = cv2.HoughCircles(gray_image,cv2.HOUGH_GRADIENT,1,50, \
                                param1=50,param2=30,minRadius=50,maxRadius=100)
+
+    if circles is None:
+        return None
+    
+    if len(circles) == 0 or len(circles[0]) < 3:
+        return None
+    
     row1x = []
     row2x = []
     row3x = []
@@ -448,7 +456,9 @@ def compute_rows(img):
     row1r = []
     row2r = []
     row3r = []
-
+    
+    #pprint(circles)
+    
     row1x.append(circles[0][0][0])
     row1y.append(circles[0][0][1])
     row1r.append(circles[0][0][2])
