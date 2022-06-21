@@ -4,7 +4,7 @@ click==6.7
 diskcache==3.0.1
 girder-client==2.3.0
 idna==2.6
-numpy==1.14.2
+numpy==1.22.0
 opencv-python==3.4.0.12
 Pillow==5.0.0
 pylaw==1.0
